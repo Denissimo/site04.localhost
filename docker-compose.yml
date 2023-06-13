@@ -1,61 +1,53 @@
-# Версия docker-compose
-version: '3.8'
-# Список наших сервисов (контейнеров)
-
-networks:
-  default:
-    external: true
-    name: gateway
-    driver: bridge
-#  dev1:
-#    internal: true
-
+version: "3.7"
 services:
-  nginx:
-    container_name: site04_nginx
-    hostname: site04_nginx
-    # используем последний стабильный образ nginx
-    image: nginx:latest
-    depends_on:
-      - php
+
+  app:
+    build:
+      args:
+        user: sammy
+        uid: 1000
+      context: ./
+      dockerfile: ./images/php/Dockerfile
+    image: site04
+    container_name: site04_php
+    working_dir: /var/www/
+    volumes:
+      - ./www:/var/www
+      - ./images/php/:/usr/local/etc/php/conf.d/
+    networks:
+      - site04
+  db:
+    image: 'bitnami/postgresql:latest'
+    container_name: site04-db
+    environment:
+      - POSTGRESQL_USERNAME=fl
+      - POSTGRESQL_PASSWORD=fl
+      - POSTGRESQL_DATABASE=site04
     ports:
-      - '80:80'
-    # монтируем директории, слева директории на основной машине, справа - куда они монтируются в контейнере
+      - 5432:5432
+    networks:
+      - site04
+  nginx:
+    image: nginx:1.17-alpine
+    container_name: site04-nginx
+    ports:
+      - 80:80
     volumes:
       - ./hosts:/etc/nginx/conf.d
       - ./www:/var/www
       - ./logs:/var/log/nginx
-    # nginx должен общаться с php контейнером
-    environment:
-      PHP_INI_SCAN_DIR: "/usr/local/etc/php/custom.d:/usr/local/etc/php/conf.d"
-    links:
-      - php
     networks:
-      - default
-#      - dev1
-  php:
-    container_name: site04_php
-    # у нас свой образ для PHP, указываем путь к нему и говорим что его надо собрать
-    build: ./images/php
-    # монтируем директорию с проектами
-    volumes:
-      - ./www:/var/www
-      - ./images/php/:/usr/local/etc/php/conf.d/
-    depends_on:
-      - postgresql
-    networks:
-      - default
-  postgresql:
-    image: 'bitnami/postgresql:latest'
-    container_name: site04_postgres
+      - site04
+  cache:
+    image: 'bitnami/redis:latest'
+    container_name: site04-cache
     environment:
-      - POSTGRESQL_USERNAME=site04
-      - POSTGRESQL_PASSWORD=site04
-      - POSTGRESQL_DATABASE=site04_db
+      - REDIS_PASSWORD=fl
     ports:
-      - 5432:5432
-    volumes:
-      - /var/lib/postgresql/data
+      - 6379:6379
     networks:
-      - default
-#      - dev1
+      - site04
+
+networks:
+  site04:
+    driver: bridge
